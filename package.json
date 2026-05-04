@@ -1,0 +1,13 @@
+{
+  "name": "mahjong",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": { "node": ">=22" },
+  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
+  "scripts": {
+    "dev": "pnpm --filter @mahjong/web dev",
+    "build": "pnpm --filter @mahjong/web build",
+    "preview": "pnpm --filter @mahjong/web preview",
+    "typecheck": "pnpm --filter @mahjong/web exec tsc -b"
+  }
+}
