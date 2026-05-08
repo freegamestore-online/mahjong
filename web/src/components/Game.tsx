@@ -163,14 +163,14 @@ export function Game({ onScore, onGameOver }: GameProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={handleHint}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold"
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold min-h-[2.75rem]"
             style={{ background: "var(--accent)", color: "#fff" }}
           >
             Hint
           </button>
           <button
             onClick={handleShuffle}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold"
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold min-h-[2.75rem]"
             style={{ background: "var(--line-strong)", color: "var(--ink)" }}
           >
             Shuffle
