@@ -63,14 +63,7 @@ export default function App() {
             { label: "Score", value: score, accent: true },
             { label: "Best", value: bestScore },
           ]}
-          actions={
-            <>
-              {phase !== "playing" && (
-                <button className="min-h-[2.75rem] min-w-[2.75rem]" onClick={start}>{phase === "menu" ? "Start" : "Play Again"}</button>
-              )}
-              <GameAuth />
-            </>
-          }
+          actions={<GameAuth />}
           rules={
             <div>
               <h3 style={{ fontWeight: 700 }}>Mahjong Solitaire</h3>
