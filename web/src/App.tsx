@@ -71,6 +71,15 @@ export default function App() {
               <GameAuth />
             </>
           }
+          rules={
+            <div>
+              <h3 style={{ fontWeight: 700 }}>Mahjong Solitaire</h3>
+              <h4 style={{ fontWeight: 600 }}>Rules</h4>
+              <ul><li>Match pairs of identical free tiles to remove them</li><li>A tile is free if not blocked on both left and right, and nothing is on top</li><li>Clear all tiles to win</li></ul>
+              <h4 style={{ fontWeight: 600 }}>Controls</h4>
+              <ul><li>Tap a free tile to select, tap its match to remove the pair</li><li>Hint button available if stuck</li></ul>
+            </div>
+          }
         />
       }
     >
