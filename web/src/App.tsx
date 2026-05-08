@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import { Shell } from "./components/Shell";
+import { GameShell, GameTopbar } from "@freeappstore/games";
 import { Game } from "./components/Game";
-import { Leaderboard } from "./components/Leaderboard";
 import { useLeaderboard } from "./hooks/useLeaderboard";
 import type { GamePhase } from "./types";
 
@@ -17,7 +16,7 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(getBestScore);
   const [gameKey, setGameKey] = useState(0);
-  const { topScores, recentScores, submitScore, loading } = useLeaderboard("mahjong");
+  const { submitScore } = useLeaderboard("mahjong");
 
   const handleScore = useCallback((s: number) => {
     setScore(s);
@@ -27,8 +26,6 @@ export default function App() {
     // Score is already set via handleScore before this fires
     setTimeout(() => {
       const best = getBestScore();
-      // Read latest score from state via closure won't work; use a ref-like approach.
-      // Actually handleScore sets it synchronously before Game calls onGameOver.
       setScore((current) => {
         if (current > best) {
           localStorage.setItem(BEST_SCORE_KEY, String(current));
@@ -58,53 +55,23 @@ export default function App() {
   }, [phase, start]);
 
   return (
-    <Shell
-      sidebar={
-        <nav className="flex-1 px-4 flex flex-col gap-3 py-4">
-          <div className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
-            Score
-          </div>
-          <div
-            className="text-3xl font-bold"
-            style={{ fontFamily: "Fraunces, serif" }}
-          >
-            {score}
-          </div>
-          <div className="text-sm" style={{ color: "var(--muted)" }}>
-            Best: {bestScore}
-          </div>
-          {phase !== "playing" && (
-            <button
-              onClick={start}
-              className="mt-4 px-4 py-2 rounded-xl font-semibold text-sm"
-              style={{ background: "var(--accent)", color: "#fff" }}
-            >
-              {phase === "menu" ? "Start" : "Play Again"}
-            </button>
-          )}
-          <div
-            className="mt-2 border-t"
-            style={{ borderColor: "var(--line)" }}
-          >
-            <div className="text-xs font-semibold px-4 pt-3" style={{ color: "var(--muted)" }}>
-              Leaderboard
-            </div>
-            <Leaderboard topScores={topScores} recentScores={recentScores} loading={loading} />
-          </div>
-        </nav>
-      }
-      dock={
-        <>
-          <div className="text-sm font-semibold">
-            Score: {score}
-          </div>
-          <div className="text-xs" style={{ color: "var(--muted)" }}>
-            Best: {bestScore}
-          </div>
-        </>
+    <GameShell
+      topbar={
+        <GameTopbar
+          title="Mahjong"
+          stats={[
+            { label: "Score", value: score, accent: true },
+            { label: "Best", value: bestScore },
+          ]}
+          actions={
+            phase !== "playing" ? (
+              <button onClick={start}>{phase === "menu" ? "Start" : "Play Again"}</button>
+            ) : undefined
+          }
+        />
       }
     >
-      <div className="relative w-full h-full min-h-[400px]">
+      <div className="relative w-full h-full">
         {phase === "playing" ? (
           <Game key={gameKey} onScore={handleScore} onGameOver={handleGameOver} />
         ) : (
@@ -139,6 +106,6 @@ export default function App() {
           </div>
         )}
       </div>
-    </Shell>
+    </GameShell>
   );
 }
