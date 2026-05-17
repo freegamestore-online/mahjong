@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { GameShell, GameTopbar, GameAuth } from "@freegamestore/games";
 import { Game } from "./components/Game";
-import { useLeaderboard } from "./hooks/useLeaderboard";
+import { useLeaderboard } from '@freegamestore/games';
 import type { GamePhase } from "./types";
 
 const BEST_SCORE_KEY = "freemahjong-best";
