@@ -1,13 +1,27 @@
 {
   "name": "mahjong",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/freegamestore-online/mahjong.git"
+  },
+  "homepage": "https://mahjong.freegamestore.online",
   "packageManager": "pnpm@10.30.3",
   "engines": { "node": ">=22" },
-  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "@biomejs/biome"],
+    "overrides": {
+      "brace-expansion@>=5.0.0 <5.0.6": ">=5.0.6"
+    }
+  },
   "scripts": {
     "dev": "pnpm --filter @mahjong/web dev",
     "build": "pnpm --filter @mahjong/web build",
     "preview": "pnpm --filter @mahjong/web preview",
-    "typecheck": "pnpm --filter @mahjong/web exec tsc -b"
+    "typecheck": "pnpm --filter @mahjong/web exec tsc -b",
+    "test": "pnpm --filter @mahjong/web test",
+    "lint": "pnpm --filter @mahjong/web lint",
+    "format": "pnpm --filter @mahjong/web format"
   }
 }
