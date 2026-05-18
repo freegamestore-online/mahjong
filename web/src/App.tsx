@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
-import { GameShell, GameTopbar, GameAuth } from "@freegamestore/games";
+import { GameAuth, GameShell, GameTopbar, useLeaderboard } from "@freegamestore/games";
+import { useCallback, useEffect, useState } from "react";
 import { Game } from "./components/Game";
-import { useLeaderboard } from '@freegamestore/games';
 import type { GamePhase } from "./types";
 
 const BEST_SCORE_KEY = "freemahjong-best";
@@ -68,9 +67,16 @@ export default function App() {
             <div>
               <h3 style={{ fontWeight: 700 }}>Mahjong Solitaire</h3>
               <h4 style={{ fontWeight: 600 }}>Rules</h4>
-              <ul><li>Match pairs of identical free tiles to remove them</li><li>A tile is free if not blocked on both left and right, and nothing is on top</li><li>Clear all tiles to win</li></ul>
+              <ul>
+                <li>Match pairs of identical free tiles to remove them</li>
+                <li>A tile is free if not blocked on both left and right, and nothing is on top</li>
+                <li>Clear all tiles to win</li>
+              </ul>
               <h4 style={{ fontWeight: 600 }}>Controls</h4>
-              <ul><li>Tap a free tile to select, tap its match to remove the pair</li><li>Hint button available if stuck</li></ul>
+              <ul>
+                <li>Tap a free tile to select, tap its match to remove the pair</li>
+                <li>Hint button available if stuck</li>
+              </ul>
             </div>
           }
         />
@@ -79,7 +85,10 @@ export default function App() {
       <div className="relative w-full h-full">
         <Game key={gameKey} onScore={handleScore} onGameOver={handleGameOver} />
         {phase === "over" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+            style={{ background: "rgba(0,0,0,0.55)" }}
+          >
             <p
               className="text-xl font-bold"
               style={{ color: "var(--success)", fontFamily: "Fraunces, serif" }}
@@ -87,6 +96,7 @@ export default function App() {
               Complete! Score: {score}
             </p>
             <button
+              type="button"
               onClick={start}
               className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
               style={{ background: "var(--accent)", color: "#fff" }}

@@ -1,27 +1,37 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import {
-  TILE_TYPES,
-  createGame,
-  isTileFree,
-  findValidPairs,
-  shuffleRemaining,
-} from "../lib/mahjong";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameTile } from "../lib/mahjong";
+import {
+  createGame,
+  findValidPairs,
+  isTileFree,
+  shuffleRemaining,
+  TILE_TYPES,
+} from "../lib/mahjong";
 
 interface GameProps {
   onScore: (score: number) => void;
   onGameOver: () => void;
 }
 
-const TILE_W = 50;
-const TILE_H = 65;
-const LAYER_OFFSET_X = 4;
-const LAYER_OFFSET_Y = 4;
+// Tile dimensions (CSS pixels in the un-scaled layout).
+const TILE_W = 52;
+const TILE_H = 68;
+// Per-layer pixel offset that gives the stack its 3D look.
+const LAYER_DX = 4;
+const LAYER_DY = 5;
+
+const ACCENT_COLOR: Record<string, string> = {
+  red: "#dc2626",
+  green: "#16a34a",
+  blue: "#2563eb",
+  dark: "#1a1a1a",
+};
 
 export function Game({ onScore, onGameOver }: GameProps) {
-  const [tiles, setTiles] = useState<GameTile[]>(() => createGame());
+  const [tiles, setTiles] = useState<GameTile[]>(() => createGame().tiles);
   const [selected, setSelected] = useState<number | null>(null);
   const [hintPair, setHintPair] = useState<[number, number] | null>(null);
+  const [stuck, setStuck] = useState(false);
   const [startTime] = useState(() => Date.now());
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
@@ -29,67 +39,55 @@ export function Game({ onScore, onGameOver }: GameProps) {
   const onGameOverRef = useRef(onGameOver);
   onScoreRef.current = onScore;
   onGameOverRef.current = onGameOver;
+  const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Timer
+  // ── Timer ──
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }, 200);
+    }, 250);
     return () => clearInterval(timerRef.current);
   }, [startTime]);
 
-  // Check win / stuck after each tile change
+  // ── Win / stuck detection (no auto-shuffle to avoid loops) ──
   useEffect(() => {
     const remaining = tiles.filter((t) => !t.removed);
     if (remaining.length === 0) {
-      // Win!
       clearInterval(timerRef.current);
       const seconds = Math.floor((Date.now() - startTime) / 1000);
-      const score = Math.max(0, 10000 - seconds);
+      const score = Math.max(0, 10000 - seconds * 5);
       onScoreRef.current(score);
       onGameOverRef.current();
       return;
     }
-    const pairs = findValidPairs(tiles);
-    if (pairs.length === 0 && remaining.length > 0) {
-      // Stuck — auto-shuffle
-      setTiles(shuffleRemaining(tiles));
-    }
+    setStuck(findValidPairs(tiles).length === 0);
   }, [tiles, startTime]);
 
   const handleTileClick = useCallback(
     (tile: GameTile) => {
       if (tile.removed) return;
       if (!isTileFree(tile, tiles)) return;
-
       setHintPair(null);
 
       if (selected === null) {
         setSelected(tile.id);
         return;
       }
-
       if (selected === tile.id) {
         setSelected(null);
         return;
       }
-
       const first = tiles.find((t) => t.id === selected);
       if (!first || first.removed) {
         setSelected(tile.id);
         return;
       }
-
       if (first.typeIndex === tile.typeIndex) {
-        // Match! Remove both.
         setTiles((prev) =>
-          prev.map((t) =>
-            t.id === first.id || t.id === tile.id ? { ...t, removed: true } : t,
-          ),
+          prev.map((t) => (t.id === first.id || t.id === tile.id ? { ...t, removed: true } : t)),
         );
         setSelected(null);
       } else {
-        // No match — select the new tile
         setSelected(tile.id);
       }
     },
@@ -111,30 +109,52 @@ export function Game({ onScore, onGameOver }: GameProps) {
     setHintPair(null);
   }, [tiles]);
 
-  // Compute free set for highlighting
-  const freeSet = new Set<number>();
-  for (const t of tiles) {
-    if (!t.removed && isTileFree(t, tiles)) {
-      freeSet.add(t.id);
+  // ── Geometry: bounding box + free set ──
+  const { freeSet, minX, minY, boardW, boardH } = useMemo(() => {
+    const fs = new Set<number>();
+    for (const t of tiles) {
+      if (!t.removed && isTileFree(t, tiles)) fs.add(t.id);
     }
-  }
+    let mnX = Infinity,
+      mxX = -Infinity,
+      mnY = Infinity,
+      mxY = -Infinity;
+    for (const t of tiles) {
+      if (t.removed) continue;
+      const x = t.pos.col * TILE_W + t.pos.layer * LAYER_DX;
+      const y = t.pos.row * TILE_H - t.pos.layer * LAYER_DY;
+      if (x < mnX) mnX = x;
+      if (x + TILE_W > mxX) mxX = x + TILE_W;
+      if (y < mnY) mnY = y;
+      if (y + TILE_H > mxY) mxY = y + TILE_H;
+    }
+    return { freeSet: fs, minX: mnX, minY: mnY, boardW: mxX - mnX, boardH: mxY - mnY };
+  }, [tiles]);
 
-  // Compute board bounding box to center
-  const activeTiles = tiles.filter((t) => !t.removed);
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const t of activeTiles) {
-    const x = t.pos.col * (TILE_W / 2) + t.pos.layer * LAYER_OFFSET_X;
-    const y = t.pos.row * (TILE_H / 2) - t.pos.layer * LAYER_OFFSET_Y;
-    if (x < minX) minX = x;
-    if (x + TILE_W > maxX) maxX = x + TILE_W;
-    if (y < minY) minY = y;
-    if (y + TILE_H > maxY) maxY = y + TILE_H;
-  }
-  const boardW = maxX - minX;
-  const boardH = maxY - minY;
+  // ── Auto-scale to fit viewport ──
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const recalc = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const padding = 16;
+      const w = el.clientWidth - padding;
+      const h = el.clientHeight - padding;
+      if (w <= 0 || h <= 0 || boardW <= 0 || boardH <= 0) return;
+      setScale(Math.min(w / boardW, h / boardH, 1.2));
+    };
+    recalc();
+    const ro = new ResizeObserver(recalc);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener("resize", recalc);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", recalc);
+    };
+  }, [boardW, boardH]);
 
-  const remaining = tiles.filter((t) => !t.removed).length;
-  const pairs = findValidPairs(tiles).length;
+  const remainingCount = tiles.filter((t) => !t.removed).length;
+  const pairCount = findValidPairs(tiles).length;
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -144,17 +164,17 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
+      {/* Status bar */}
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
         style={{ borderColor: "var(--line)", background: "var(--panel)" }}
       >
         <div className="flex items-center gap-4 text-sm">
           <span>
-            Tiles: <strong>{remaining}</strong>
+            Tiles: <strong>{remainingCount}</strong>
           </span>
           <span>
-            Pairs: <strong>{pairs}</strong>
+            Pairs: <strong>{pairCount}</strong>
           </span>
           <span>
             Time: <strong>{formatTime(elapsed)}</strong>
@@ -162,13 +182,20 @@ export function Game({ onScore, onGameOver }: GameProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleHint}
+            disabled={pairCount === 0}
             className="px-3 py-1.5 rounded-xl text-xs font-semibold min-h-[2.75rem]"
-            style={{ background: "var(--accent)", color: "#fff" }}
+            style={{
+              background: pairCount === 0 ? "var(--line-strong)" : "var(--accent)",
+              color: "#fff",
+              opacity: pairCount === 0 ? 0.6 : 1,
+            }}
           >
             Hint
           </button>
           <button
+            type="button"
             onClick={handleShuffle}
             className="px-3 py-1.5 rounded-xl text-xs font-semibold min-h-[2.75rem]"
             style={{ background: "var(--line-strong)", color: "var(--ink)" }}
@@ -178,95 +205,87 @@ export function Game({ onScore, onGameOver }: GameProps) {
         </div>
       </div>
 
+      {/* Stuck banner */}
+      {stuck && remainingCount > 0 && (
+        <div
+          className="px-4 py-2 text-sm text-center shrink-0"
+          style={{ background: "var(--warning)", color: "#fff" }}
+        >
+          No matches available — tap <strong>Shuffle</strong> to keep playing.
+        </div>
+      )}
+
       {/* Board */}
-      <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+      <div ref={wrapRef} className="flex-1 overflow-hidden flex items-center justify-center">
         <div
           style={{
             position: "relative",
             width: boardW,
             height: boardH,
+            transform: `scale(${scale})`,
+            transformOrigin: "center center",
           }}
         >
-          {/* Render tiles sorted by layer (back to front), then row, then col */}
           {tiles
             .filter((t) => !t.removed)
             .sort(
-              (a, b) =>
-                a.pos.layer - b.pos.layer ||
-                a.pos.row - b.pos.row ||
-                a.pos.col - b.pos.col,
+              (a, b) => a.pos.layer - b.pos.layer || a.pos.row - b.pos.row || a.pos.col - b.pos.col,
             )
             .map((tile) => {
-              const tileType = TILE_TYPES[tile.typeIndex % TILE_TYPES.length]!;
+              const tt = TILE_TYPES[tile.typeIndex]!;
               const free = freeSet.has(tile.id);
-              const isSelected = selected === tile.id;
+              const isSel = selected === tile.id;
               const isHinted =
-                hintPair !== null &&
-                (hintPair[0] === tile.id || hintPair[1] === tile.id);
+                hintPair !== null && (hintPair[0] === tile.id || hintPair[1] === tile.id);
 
-              const x =
-                tile.pos.col * (TILE_W / 2) +
-                tile.pos.layer * LAYER_OFFSET_X -
-                minX;
-              const y =
-                tile.pos.row * (TILE_H / 2) -
-                tile.pos.layer * LAYER_OFFSET_Y -
-                minY;
+              const x = tile.pos.col * TILE_W + tile.pos.layer * LAYER_DX - minX;
+              const y = tile.pos.row * TILE_H - tile.pos.layer * LAYER_DY - minY;
 
-              let borderColor = "var(--line-strong)";
-              if (isSelected) borderColor = "var(--accent)";
-              else if (isHinted) borderColor = "var(--warning)";
-
-              const suitLabel =
-                tileType.suit === "bamboo"
-                  ? "B"
-                  : tileType.suit === "circle"
-                    ? "C"
-                    : tileType.suit === "character"
-                      ? "K"
-                      : "";
+              let outline = "rgba(0,0,0,0.18)";
+              if (isSel) outline = "var(--accent)";
+              else if (isHinted) outline = "var(--warning)";
 
               return (
                 <button
+                  type="button"
                   key={tile.id}
                   onClick={() => handleTileClick(tile)}
                   disabled={!free}
+                  aria-label={`${tt.group} tile`}
                   style={{
                     position: "absolute",
                     left: x,
                     top: y,
                     width: TILE_W,
                     height: TILE_H,
-                    zIndex: tile.pos.layer * 100 + tile.pos.row,
-                    background: tileType.bg,
-                    color: tileType.fg,
-                    border: `2px solid ${borderColor}`,
-                    borderRadius: 6,
-                    boxShadow: isSelected
-                      ? "0 0 0 2px var(--accent)"
+                    zIndex: tile.pos.layer * 1000 + tile.pos.row * 20 + tile.pos.col,
+                    background: free
+                      ? "linear-gradient(180deg, #fefdf8 0%, #f1ead8 100%)"
+                      : "linear-gradient(180deg, #ece6d4 0%, #d8d0bb 100%)",
+                    color: ACCENT_COLOR[tt.accent],
+                    border: `2px solid ${outline}`,
+                    borderRadius: 8,
+                    boxShadow: isSel
+                      ? "0 0 0 3px var(--accent), 0 2px 4px rgba(0,0,0,0.2)"
                       : isHinted
-                        ? "0 0 0 2px var(--warning)"
-                        : `${tile.pos.layer * 2}px ${tile.pos.layer * 2}px ${tile.pos.layer * 3}px rgba(0,0,0,0.35)`,
-                    opacity: free ? 1 : 0.7,
+                        ? "0 0 0 3px var(--warning), 0 2px 4px rgba(0,0,0,0.2)"
+                        : "inset -2px -2px 0 rgba(0,0,0,0.08), inset 2px 2px 0 rgba(255,255,255,0.6), 1px 2px 3px rgba(0,0,0,0.25)",
+                    opacity: free ? 1 : 0.85,
                     cursor: free ? "pointer" : "default",
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     padding: 0,
-                    fontFamily: "Manrope, system-ui, sans-serif",
-                    fontWeight: 700,
-                    fontSize: 18,
+                    fontFamily:
+                      '"Noto Sans Mahjong", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", system-ui, sans-serif',
+                    fontWeight: 500,
+                    fontSize: 38,
                     lineHeight: 1,
-                    transition: "box-shadow 0.15s, border-color 0.15s",
+                    transition: "transform 0.1s, box-shadow 0.15s, border-color 0.15s",
+                    transform: isSel ? "translateY(-2px)" : "none",
                   }}
                 >
-                  <span>{tileType.label}</span>
-                  {suitLabel && (
-                    <span style={{ fontSize: 9, opacity: 0.8, marginTop: 2 }}>
-                      {suitLabel}
-                    </span>
-                  )}
+                  <span style={{ pointerEvents: "none" }}>{tt.glyph}</span>
                 </button>
               );
             })}

@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const WEB = resolve(__dirname, "../..");
 const ROOT = resolve(WEB, "..");
@@ -85,10 +85,18 @@ describe("FreeGameStore compliance", () => {
 
   describe("no banned content", () => {
     const appTsx = read("src/App.tsx");
-    const css = read("src/index.css");
 
     it("no tracking SDKs", () => {
-      const banned = ["google-analytics", "gtag", "amplitude", "mixpanel", "segment", "hotjar", "plausible", "posthog"];
+      const banned = [
+        "google-analytics",
+        "gtag",
+        "amplitude",
+        "mixpanel",
+        "segment",
+        "hotjar",
+        "plausible",
+        "posthog",
+      ];
       for (const b of banned) {
         expect(appTsx).not.toContain(b);
       }

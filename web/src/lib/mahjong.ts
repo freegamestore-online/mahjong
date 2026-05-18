@@ -1,57 +1,55 @@
-// ── Tile definitions ──
+// ── Tile types ──
+// 36 distinct face types × 4 copies = 144 tiles.
+// Faces use Unicode mahjong tile codepoints (U+1F000..U+1F02B).
 
 export interface TileType {
-  suit: string;
-  value: string;
-  label: string;
-  bg: string;
-  fg: string;
+  glyph: string;
+  group: "wind" | "dragon" | "character" | "bamboo" | "circle" | "flower";
+  accent: "red" | "green" | "blue" | "dark";
 }
 
-const SUITS: { name: string; bg: string; fg: string; values: string[] }[] = [
-  { name: "bamboo", bg: "#16a34a", fg: "#fff", values: ["1","2","3","4","5","6","7","8","9"] },
-  { name: "circle", bg: "#2563eb", fg: "#fff", values: ["1","2","3","4","5","6","7","8","9"] },
-  { name: "character", bg: "#dc2626", fg: "#fff", values: ["1","2","3","4","5","6","7","8","9"] },
-];
-
-const WINDS: { value: string; label: string }[] = [
-  { value: "N", label: "N" },
-  { value: "S", label: "S" },
-  { value: "E", label: "E" },
-  { value: "W", label: "W" },
-];
-
-const DRAGONS: { value: string; label: string; bg: string; fg: string }[] = [
-  { value: "R", label: "R", bg: "#dc2626", fg: "#fff" },
-  { value: "G", label: "G", bg: "#16a34a", fg: "#fff" },
-  { value: "W", label: "W", bg: "#e5e7eb", fg: "#1a1a1a" },
-];
-
-function buildTileTypes(): TileType[] {
-  const types: TileType[] = [];
-  for (const suit of SUITS) {
-    for (const v of suit.values) {
-      types.push({
-        suit: suit.name,
-        value: v,
-        label: v,
-        bg: suit.bg,
-        fg: suit.fg,
-      });
-    }
-  }
-  for (const w of WINDS) {
-    types.push({ suit: "wind", value: w.value, label: w.label, bg: "#6b7280", fg: "#fff" });
-  }
-  for (const d of DRAGONS) {
-    types.push({ suit: "dragon", value: d.value, label: d.label, bg: d.bg, fg: d.fg });
-  }
-  return types;
+function range(start: number, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => String.fromCodePoint(start + i));
 }
 
-export const TILE_TYPES: TileType[] = buildTileTypes(); // 34 unique types
+export const TILE_TYPES: TileType[] = [
+  // Winds 🀀🀁🀂🀃
+  ...range(0x1f000, 4).map((g) => ({ glyph: g, group: "wind" as const, accent: "dark" as const })),
+  // Dragons: 🀄 red, 🀅 green, 🀆 white
+  { glyph: "🀄", group: "dragon", accent: "red" },
+  { glyph: "🀅", group: "dragon", accent: "green" },
+  { glyph: "🀆", group: "dragon", accent: "dark" },
+  // Characters (man) 🀇..🀏
+  ...range(0x1f007, 9).map((g) => ({
+    glyph: g,
+    group: "character" as const,
+    accent: "red" as const,
+  })),
+  // Bamboo 🀐..🀘
+  ...range(0x1f010, 9).map((g) => ({
+    glyph: g,
+    group: "bamboo" as const,
+    accent: "green" as const,
+  })),
+  // Circles 🀙..🀡
+  ...range(0x1f019, 9).map((g) => ({
+    glyph: g,
+    group: "circle" as const,
+    accent: "blue" as const,
+  })),
+  // Flowers (only 2 needed to reach 36): 🀢 plum, 🀤 chrysanthemum
+  { glyph: "🀢", group: "flower", accent: "red" },
+  { glyph: "🀤", group: "flower", accent: "green" },
+];
+
+if (TILE_TYPES.length !== 36) {
+  throw new Error(`TILE_TYPES must have 36 entries, got ${TILE_TYPES.length}`);
+}
 
 // ── Layout ──
+// Coordinates are integer tile-grid units. A tile at (row, col, layer)
+// occupies one cell. A higher-layer tile at the same (row, col) is stacked
+// directly on top. Left/right neighbors are at col±1 on the same layer.
 
 export interface LayoutPos {
   row: number;
@@ -60,60 +58,49 @@ export interface LayoutPos {
 }
 
 /**
- * Classic "Turtle" layout for 144 tiles.
- * 5 layers, pyramid-shaped with fewer tiles on higher layers.
+ * Builds a 144-tile pyramid: 88 + 36 + 16 + 4.
+ * Symmetric, mobile-friendly, four-layer stack.
  */
-function buildTurtleLayout(): LayoutPos[] {
+function buildLayout(): LayoutPos[] {
   const positions: LayoutPos[] = [];
 
-  // Layer 0 (ground): 12 columns x 8 rows = varied shape
-  // Classic turtle: wider in middle, narrower at edges
-  const layer0Rows: [number, number][] = [
-    // [colStart, colEnd] for each row (inclusive, using half-column units)
-    [2, 23],  // row 0: 11 tiles
-    [0, 25],  // row 1: 13 tiles
-    [1, 24],  // row 2: 12 tiles
-    [0, 25],  // row 3: 13 tiles
-    [0, 25],  // row 4: 13 tiles
-    [1, 24],  // row 5: 12 tiles
-    [0, 25],  // row 6: 13 tiles
-    [2, 23],  // row 7: 11 tiles
+  // Layer 0 — 88 tiles, diamond-tapered footprint (9 rows × up to 12 cols)
+  const layer0Cols: [number, number][] = [
+    [3, 8], // row 0: 6 tiles
+    [2, 9], // row 1: 8 tiles
+    [0, 11], // row 2: 12 tiles
+    [0, 11], // row 3: 12 tiles
+    [0, 11], // row 4: 12 tiles
+    [0, 11], // row 5: 12 tiles
+    [0, 11], // row 6: 12 tiles
+    [2, 9], // row 7: 8 tiles
+    [3, 8], // row 8: 6 tiles
   ];
-  for (let r = 0; r < layer0Rows.length; r++) {
-    const [start, end] = layer0Rows[r]!;
-    for (let c = start; c <= end; c += 2) {
-      positions.push({ row: r * 2, col: c, layer: 0 });
-    }
+  for (let r = 0; r < layer0Cols.length; r++) {
+    const [s, e] = layer0Cols[r]!;
+    for (let c = s; c <= e; c++) positions.push({ row: r, col: c, layer: 0 });
   }
 
-  // Layer 1: 10 columns x 6 rows (centered)
-  for (let r = 0; r < 6; r++) {
-    for (let c = 0; c < 10; c += 2) {
-      positions.push({ row: r * 2 + 2, col: c + 4, layer: 1 });
-    }
-  }
+  // Layer 1 — 36 tiles (6 rows × 6 cols, centered)
+  for (let r = 2; r <= 7; r++)
+    for (let c = 3; c <= 8; c++) positions.push({ row: r, col: c, layer: 1 });
 
-  // Layer 2: 8 columns x 4 rows (centered)
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 8; c += 2) {
-      positions.push({ row: r * 2 + 4, col: c + 6, layer: 2 });
-    }
-  }
+  // Layer 2 — 16 tiles (4 rows × 4 cols, centered)
+  for (let r = 3; r <= 6; r++)
+    for (let c = 4; c <= 7; c++) positions.push({ row: r, col: c, layer: 2 });
 
-  // Layer 3: 6 columns x 2 rows (centered)
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 6; c += 2) {
-      positions.push({ row: r * 2 + 6, col: c + 8, layer: 3 });
-    }
-  }
-
-  // Layer 4: 1 tile (top cap)
-  positions.push({ row: 7, col: 11, layer: 4 });
+  // Layer 3 — 4 tiles (2 rows × 2 cols, top cap)
+  for (let r = 4; r <= 5; r++)
+    for (let c = 5; c <= 6; c++) positions.push({ row: r, col: c, layer: 3 });
 
   return positions;
 }
 
-const TURTLE_LAYOUT = buildTurtleLayout();
+export const LAYOUT: LayoutPos[] = buildLayout();
+
+if (LAYOUT.length !== 144) {
+  throw new Error(`LAYOUT must have 144 positions, got ${LAYOUT.length}`);
+}
 
 // ── Game tile ──
 
@@ -124,111 +111,134 @@ export interface GameTile {
   removed: boolean;
 }
 
-// ── Shuffle helper ──
+// ── Helpers ──
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
+function shuffleInPlace<T>(a: T[]): void {
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [a[i], a[j]] = [a[j]!, a[i]!];
   }
-  return a;
 }
 
-// ── Create a solvable game ──
+function key(r: number, c: number, l: number): string {
+  return `${r},${c},${l}`;
+}
 
-/**
- * Builds 144 tiles assigned to the turtle layout.
- * We use 34 unique types. 144 / 4 = 36 type-slots needed.
- * We use all 34 types (x4 = 136) + repeat the first 2 types (x4 = 8) = 144.
- */
-export function createGame(): GameTile[] {
-  const layout = TURTLE_LAYOUT;
-  const count = layout.length;
+// "Free for removal" predicate given a set of present positions.
+function freeWith(p: LayoutPos, present: Set<string>): boolean {
+  if (present.has(key(p.row, p.col, p.layer + 1))) return false;
+  const left = present.has(key(p.row, p.col - 1, p.layer));
+  const right = present.has(key(p.row, p.col + 1, p.layer));
+  return !(left && right);
+}
 
-  // Build type indices: 4 copies of each type, enough to fill the layout
-  const typesNeeded = Math.ceil(count / 4);
-  const typeIndices: number[] = [];
-  for (let i = 0; i < typesNeeded; i++) {
-    const idx = i % TILE_TYPES.length;
-    typeIndices.push(idx, idx, idx, idx);
+// ── Solvable removal order via greedy forward simulation ──
+//
+// We start with the full layout populated, repeatedly pick any two free tiles,
+// and remove them — recording the pairing. The recorded sequence IS the forward
+// removal order; once we assign matching types to each recorded pair, every
+// recorded removal becomes a valid Mahjong move.
+
+function buildRemovalOrder(): [number, number][] | null {
+  const active = new Set<number>(LAYOUT.map((_, i) => i));
+  const present = new Set<string>();
+  for (const p of LAYOUT) present.add(key(p.row, p.col, p.layer));
+
+  const pairs: [number, number][] = [];
+  while (active.size > 0) {
+    const free: number[] = [];
+    for (const i of active) {
+      if (freeWith(LAYOUT[i]!, present)) free.push(i);
+    }
+    if (free.length < 2) return null;
+
+    shuffleInPlace(free);
+    const a = free[0]!;
+    const b = free[1]!;
+    pairs.push([a, b]);
+    active.delete(a);
+    active.delete(b);
+    const pa = LAYOUT[a]!;
+    const pb = LAYOUT[b]!;
+    present.delete(key(pa.row, pa.col, pa.layer));
+    present.delete(key(pb.row, pb.col, pb.layer));
   }
-  // Trim to exact count
-  const shuffled = shuffle(typeIndices).slice(0, count);
+  return pairs;
+}
 
-  return layout.map((pos, i) => ({
+// ── Public: create a new solvable game ──
+
+export interface NewGame {
+  tiles: GameTile[];
+  /**
+   * Pair-removal sequence (tile-id pairs) guaranteed to clear the board when
+   * applied in order. This is the reverse of the construction order — the
+   * last pair built in reverse-construction is the first pair removable from
+   * the full board.
+   */
+  solution: [number, number][];
+}
+
+export function createGame(): NewGame {
+  let solution: [number, number][] | null = null;
+  for (let attempt = 0; attempt < 50 && solution === null; attempt++) {
+    solution = buildRemovalOrder();
+  }
+  if (solution === null) {
+    // The greedy forward simulation should never fail on this layout, but if
+    // it ever does we surface a hard error rather than silently shipping an
+    // unsolvable board.
+    throw new Error("Mahjong: failed to build a solvable removal order");
+  }
+
+  // 36 types × 2 pairs each = 72 pair slots, shuffled so two distant pairs
+  // can share a type.
+  const typeForPair: number[] = [];
+  for (let t = 0; t < TILE_TYPES.length; t++) typeForPair.push(t, t);
+  shuffleInPlace(typeForPair);
+
+  const tiles: GameTile[] = LAYOUT.map((pos, i) => ({
     id: i,
-    typeIndex: shuffled[i]!,
+    typeIndex: -1,
     pos,
     removed: false,
   }));
+  for (let i = 0; i < solution.length; i++) {
+    const [a, b] = solution[i]!;
+    const t = typeForPair[i]!;
+    tiles[a]!.typeIndex = t;
+    tiles[b]!.typeIndex = t;
+  }
+  return { tiles, solution };
 }
 
-// ── Free tile check ──
+// ── Forward-play helpers ──
 
-/**
- * A tile is "free" if:
- *  1. No tile is stacked on top of it (any tile on a higher layer that overlaps)
- *  2. At least one side (left or right) is open (no adjacent tile on the same layer)
- */
-export function isTileFree(tile: GameTile, allTiles: GameTile[]): boolean {
+export function isTileFree(tile: GameTile, all: GameTile[]): boolean {
   if (tile.removed) return false;
-
-  const active = allTiles.filter((t) => !t.removed && t.id !== tile.id);
-
-  // Check if any tile is on top (higher layer, overlapping position)
-  const hasTop = active.some(
-    (t) =>
-      t.pos.layer === tile.pos.layer + 1 &&
-      Math.abs(t.pos.row - tile.pos.row) < 2 &&
-      Math.abs(t.pos.col - tile.pos.col) < 2,
-  );
-  if (hasTop) return false;
-
-  // Check left and right neighbors on the same layer
-  const hasLeft = active.some(
-    (t) =>
-      t.pos.layer === tile.pos.layer &&
-      t.pos.row === tile.pos.row &&
-      t.pos.col === tile.pos.col - 2,
-  );
-  const hasRight = active.some(
-    (t) =>
-      t.pos.layer === tile.pos.layer &&
-      t.pos.row === tile.pos.row &&
-      t.pos.col === tile.pos.col + 2,
-  );
-
-  return !hasLeft || !hasRight;
+  const present = new Set<string>();
+  for (const t of all) {
+    if (!t.removed && t.id !== tile.id) present.add(key(t.pos.row, t.pos.col, t.pos.layer));
+  }
+  return freeWith(tile.pos, present);
 }
-
-// ── Find valid pairs ──
 
 export function findValidPairs(tiles: GameTile[]): [GameTile, GameTile][] {
   const free = tiles.filter((t) => isTileFree(t, tiles));
   const pairs: [GameTile, GameTile][] = [];
-
   for (let i = 0; i < free.length; i++) {
     for (let j = i + 1; j < free.length; j++) {
-      if (free[i]!.typeIndex === free[j]!.typeIndex) {
-        pairs.push([free[i]!, free[j]!]);
-      }
+      if (free[i]!.typeIndex === free[j]!.typeIndex) pairs.push([free[i]!, free[j]!]);
     }
   }
   return pairs;
 }
 
-// ── Shuffle remaining tiles (keep positions, reassign types) ──
-
 export function shuffleRemaining(tiles: GameTile[]): GameTile[] {
   const remaining = tiles.filter((t) => !t.removed);
   const removed = tiles.filter((t) => t.removed);
-
-  const typeIndices = shuffle(remaining.map((t) => t.typeIndex));
-  const reshuffled = remaining.map((t, i) => ({
-    ...t,
-    typeIndex: typeIndices[i]!,
-  }));
-
+  const types = remaining.map((t) => t.typeIndex);
+  shuffleInPlace(types);
+  const reshuffled = remaining.map((t, i) => ({ ...t, typeIndex: types[i]! }));
   return [...reshuffled, ...removed];
 }
