@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useGameSounds } from "@freegamestore/games";
 import type { GameTile } from "../lib/mahjong";
 import {
   createGame,
@@ -40,6 +41,11 @@ export function Game({ onScore, onGameOver }: GameProps) {
   onScoreRef.current = onScore;
   onGameOverRef.current = onGameOver;
   const wrapRef = useRef<HTMLDivElement>(null);
+  const sounds = useGameSounds();
+  const soundsRef = useRef(sounds);
+  soundsRef.current = sounds;
+  const wonRef = useRef(false);
+  const stuckSoundRef = useRef(false);
 
   // ── Timer ──
   useEffect(() => {
@@ -57,10 +63,21 @@ export function Game({ onScore, onGameOver }: GameProps) {
       const seconds = Math.floor((Date.now() - startTime) / 1000);
       const score = Math.max(0, 10000 - seconds * 5);
       onScoreRef.current(score);
+      if (!wonRef.current) {
+        wonRef.current = true;
+        soundsRef.current.playLevelUp();
+      }
       onGameOverRef.current();
       return;
     }
-    setStuck(findValidPairs(tiles).length === 0);
+    const noPairs = findValidPairs(tiles).length === 0;
+    setStuck(noPairs);
+    if (noPairs && !stuckSoundRef.current) {
+      stuckSoundRef.current = true;
+      soundsRef.current.playGameOver();
+    } else if (!noPairs) {
+      stuckSoundRef.current = false;
+    }
   }, [tiles, startTime]);
 
   const handleTileClick = useCallback(
@@ -71,15 +88,18 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
       if (selected === null) {
         setSelected(tile.id);
+        soundsRef.current.playTick();
         return;
       }
       if (selected === tile.id) {
         setSelected(null);
+        soundsRef.current.playTick();
         return;
       }
       const first = tiles.find((t) => t.id === selected);
       if (!first || first.removed) {
         setSelected(tile.id);
+        soundsRef.current.playTick();
         return;
       }
       if (first.typeIndex === tile.typeIndex) {
@@ -87,8 +107,10 @@ export function Game({ onScore, onGameOver }: GameProps) {
           prev.map((t) => (t.id === first.id || t.id === tile.id ? { ...t, removed: true } : t)),
         );
         setSelected(null);
+        soundsRef.current.playClear();
       } else {
         setSelected(tile.id);
+        soundsRef.current.playTick();
       }
     },
     [tiles, selected],
