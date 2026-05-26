@@ -20,7 +20,7 @@
     "format": "biome format --write src"
   },
   "dependencies": {
-    "@freegamestore/games": "^0.13.3",
+    "@freegamestore/games": "^0.14.0",
     "react": "^19",
     "react-dom": "^19"
   },
