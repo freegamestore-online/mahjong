@@ -5,13 +5,15 @@ import {
   createGame,
   findValidPairs,
   isTileFree,
+  LAYOUT,
   shuffleRemaining,
   TILE_TYPES,
 } from "../lib/mahjong";
 
 interface GameProps {
   onScore: (score: number) => void;
-  onGameOver: () => void;
+  /** `score` is null when the board is stuck and cannot be cleared. */
+  onGameOver: (score: number | null) => void;
 }
 
 // Tile dimensions (CSS pixels in the un-scaled layout).
@@ -20,6 +22,25 @@ const TILE_H = 68;
 // Per-layer pixel offset that gives the stack its 3D look.
 const LAYER_DX = 4;
 const LAYER_DY = 5;
+
+// Bounding box of the full layout. Using it (rather than the remaining tiles)
+// keeps the board from shifting and rescaling as pairs are removed.
+export const BOARD_BOUNDS = (() => {
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const p of LAYOUT) {
+    const x = p.col * TILE_W + p.layer * LAYER_DX;
+    const y = p.row * TILE_H - p.layer * LAYER_DY;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x + TILE_W);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y + TILE_H);
+  }
+  return { minX, minY, boardW: maxX - minX, boardH: maxY - minY };
+})();
+const { minX, minY, boardW, boardH } = BOARD_BOUNDS;
 
 const ACCENT_COLOR: Record<string, string> = {
   red: "#dc2626",
@@ -44,7 +65,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
   const sounds = useGameSounds();
   const soundsRef = useRef(sounds);
   soundsRef.current = sounds;
-  const wonRef = useRef(false);
+  const overRef = useRef(false);
   const stuckSoundRef = useRef(false);
 
   // ── Timer ──
@@ -63,15 +84,26 @@ export function Game({ onScore, onGameOver }: GameProps) {
       const seconds = Math.floor((Date.now() - startTime) / 1000);
       const score = Math.max(0, 10000 - seconds * 5);
       onScoreRef.current(score);
-      if (!wonRef.current) {
-        wonRef.current = true;
+      if (!overRef.current) {
+        overRef.current = true;
         soundsRef.current.playLevelUp();
+        onGameOverRef.current(score);
       }
-      onGameOverRef.current();
       return;
     }
     const noPairs = findValidPairs(tiles).length === 0;
     setStuck(noPairs);
+    // With fewer than two free tiles (e.g. the last pair stacked on itself),
+    // shuffling can never produce a move, so the game is lost.
+    if (noPairs && remaining.filter((t) => isTileFree(t, tiles)).length < 2) {
+      clearInterval(timerRef.current);
+      if (!overRef.current) {
+        overRef.current = true;
+        soundsRef.current.playGameOver();
+        onGameOverRef.current(null);
+      }
+      return;
+    }
     if (noPairs && !stuckSoundRef.current) {
       stuckSoundRef.current = true;
       soundsRef.current.playGameOver();
@@ -131,26 +163,12 @@ export function Game({ onScore, onGameOver }: GameProps) {
     setHintPair(null);
   }, [tiles]);
 
-  // ── Geometry: bounding box + free set ──
-  const { freeSet, minX, minY, boardW, boardH } = useMemo(() => {
+  const freeSet = useMemo(() => {
     const fs = new Set<number>();
     for (const t of tiles) {
       if (!t.removed && isTileFree(t, tiles)) fs.add(t.id);
     }
-    let mnX = Infinity,
-      mxX = -Infinity,
-      mnY = Infinity,
-      mxY = -Infinity;
-    for (const t of tiles) {
-      if (t.removed) continue;
-      const x = t.pos.col * TILE_W + t.pos.layer * LAYER_DX;
-      const y = t.pos.row * TILE_H - t.pos.layer * LAYER_DY;
-      if (x < mnX) mnX = x;
-      if (x + TILE_W > mxX) mxX = x + TILE_W;
-      if (y < mnY) mnY = y;
-      if (y + TILE_H > mxY) mxY = y + TILE_H;
-    }
-    return { freeSet: fs, minX: mnX, minY: mnY, boardW: mxX - mnX, boardH: mxY - mnY };
+    return fs;
   }, [tiles]);
 
   // ── Auto-scale to fit viewport ──
@@ -162,7 +180,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
       const padding = 16;
       const w = el.clientWidth - padding;
       const h = el.clientHeight - padding;
-      if (w <= 0 || h <= 0 || boardW <= 0 || boardH <= 0) return;
+      if (w <= 0 || h <= 0) return;
       setScale(Math.min(w / boardW, h / boardH, 1.2));
     };
     recalc();
@@ -173,7 +191,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
       ro.disconnect();
       window.removeEventListener("resize", recalc);
     };
-  }, [boardW, boardH]);
+  }, []);
 
   const remainingCount = tiles.filter((t) => !t.removed).length;
   const pairCount = findValidPairs(tiles).length;
@@ -244,6 +262,9 @@ export function Game({ onScore, onGameOver }: GameProps) {
             position: "relative",
             width: boardW,
             height: boardH,
+            // Without this the flex parent shrinks the board to the viewport
+            // width on phones and the scaled tiles end up off-centre.
+            flexShrink: 0,
             transform: `scale(${scale})`,
             transformOrigin: "center center",
           }}
@@ -299,7 +320,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
                     justifyContent: "center",
                     padding: 0,
                     fontFamily:
-                      '"Noto Sans Mahjong", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", system-ui, sans-serif',
+                      '"Mahjong Tiles", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", system-ui, sans-serif',
                     fontWeight: 500,
                     fontSize: 38,
                     lineHeight: 1,

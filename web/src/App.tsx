@@ -15,27 +15,26 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(getBestScore);
   const [gameKey, setGameKey] = useState(0);
+  const [won, setWon] = useState(false);
   const { submitScore } = useLeaderboard("mahjong");
 
   const handleScore = useCallback((s: number) => {
     setScore(s);
   }, []);
 
-  const handleGameOver = useCallback(() => {
-    // Score is already set via handleScore before this fires
-    setTimeout(() => {
-      const best = getBestScore();
-      setScore((current) => {
-        if (current > best) {
-          localStorage.setItem(BEST_SCORE_KEY, String(current));
-          setBestScore(current);
-        }
-        submitScore(current);
-        return current;
-      });
+  const handleGameOver = useCallback(
+    (finalScore: number | null) => {
+      setWon(finalScore !== null);
       setPhase("over");
-    }, 0);
-  }, [submitScore]);
+      if (finalScore === null) return;
+      if (finalScore > getBestScore()) {
+        localStorage.setItem(BEST_SCORE_KEY, String(finalScore));
+        setBestScore(finalScore);
+      }
+      submitScore(finalScore);
+    },
+    [submitScore],
+  );
 
   const start = useCallback(() => {
     setScore(0);
@@ -62,6 +61,7 @@ export default function App() {
             { label: "Score", value: score, accent: true },
             { label: "Best", value: bestScore },
           ]}
+          onRestart={start}
           actions={<GameAuth />}
           rules={
             <div>
@@ -91,9 +91,12 @@ export default function App() {
           >
             <p
               className="text-xl font-bold"
-              style={{ color: "var(--success)", fontFamily: "Fraunces, serif" }}
+              style={{
+                color: won ? "var(--success)" : "var(--warning)",
+                fontFamily: "Fraunces, serif",
+              }}
             >
-              Complete! Score: {score}
+              {won ? `Complete! Score: ${score}` : "No moves left"}
             </p>
             <button
               type="button"
@@ -109,4 +112,3 @@ export default function App() {
     </GameShell>
   );
 }
-// force sw update 1778279432
