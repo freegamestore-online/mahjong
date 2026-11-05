@@ -320,7 +320,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
                     justifyContent: "center",
                     padding: 0,
                     fontFamily:
-                      '"Mahjong Tiles", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", system-ui, sans-serif',
+                      '"Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", system-ui, sans-serif',
                     fontWeight: 500,
                     fontSize: 38,
                     lineHeight: 1,

@@ -5,7 +5,7 @@
 /* Mahjong tile faces: Noto Sans Symbols 2 subset (U+1F000-1F024, OFL, see public/fonts/OFL.txt).
    Bundled because few Android/Windows system fonts cover the Mahjong Tiles block. */
 @font-face {
-  font-family: "Mahjong Tiles";
+  font-family: "Noto Sans";
   src: url("/fonts/noto-sans-symbols-2-mahjong.woff2") format("woff2");
   font-display: block;
   unicode-range: U+1F000-1F02B;
